@@ -3,19 +3,8 @@
 # Created/Written by Cesar Caballero Gaudes @ BCBL.
 # Amended and adapted by Hilmar P Sigurdsson - email: hpsig86@gmail.com
 # @ Nottingham 2018
+# Amended and adapted by Eneko Uruñuela and Mairi Houlgreave December 2021
 
-# Path to data /Volumes/SILVER/Studies_ongoing/BFinND/TS030_09082018_BFinND/fMRI/Run01/Run01.feat
-# Name of file: filtered_func_data.nii.gz
-# Create percent signal change data with AFNI command 3dcalc: 
-# 3dcalc -a filtered_func_data.nii.gz -b mean_func_nii.gz -expr '(a-b)/b' -prefix pc_filtered_func_data.nii.gz
-
-if [ "$1" == "-h" ]; then
-  echo "Usage: `basename $0` 
-  [Insert cleaver description here]"
-  exit 0
-fi
-
-# Then run 3dPFM command: 3dPFM -input pc_filtered_func_data.nii.gz -algorithm lasso -criteria bic -hrf SPMG1 -mask mask.nii.gz -maxiterfactor 0.4 -outZAll lasso_BIC_SPMG1 -jobs 4
 PRJDIR=/mnt/h/Experiments/Experiment2-Blink_Tic/SPFM
 MINBETA=0.01
 CLUSTERSIZE=5
@@ -43,33 +32,14 @@ do
 	cd ${CRDIR}/${SBJID%%_*}/${SBJID##*_}/
 	pwd
 
-	# ---- CREATE MASK IN NATIVE SPACE ---- 
-		# # \\ Using FSL's FLIRT function
-	# flirt -in ${MYMASK} -applyxfm -init reg/standard2example_func.mat -out ROI_in_Native -paddingsize 0.0 -ref mean_func.nii.gz 
-		# # \\ Threshold and binarise
-	# fslmaths ROI_in_Native.nii.gz -thr 0.35 -bin ${NATIVEMASK}
-
-	# # ---- COMPUTE PERCENT SIGNAL CHANGE IMAGE -----
-		# # \\ Assuming that filtered_func_data has non-zero mean, expr is (a-b)/b
-		# # \\ If filtered_func_data has already zero_mean, expr is a/b, where b is the mean of the filtered_func_data before removing the mean (or detrending)
-	# 3dcalc -a filtered_func_data.nii.gz -b mean_func.nii.gz -expr '(a-b)/b' -prefix pc_filtered_func_data.nii.gz -overwrite
-	# echo "_____ Done computing percent signal change image = pc_filt_func_data _____"
-
-		# # \\ Create surrogate dataset
-	# 3dFFTshuffle -input pc_filtered_func_data.nii.gz -mask mask.nii.gz -prefix shuff -jobs 4
-	# echo "Done computing surrogate dataset from pc_filt_func_data"
+	
 
 	for DATASET in ${SBJID%%_*}_${SBJID##*_}_BIC_SPMG1.DR2_4D_clust.nii.gz #pc_filtered_func_data.nii.gz shuff_pc_filtered_func_data.nii.gz
 	do
 		for CRITERIA in bic #aic
 		do
 
-			# PFX="lasso_${CRITERIA}_SPMG1"
-			# echo -e "\033[1m____ This is the PFX = ${PFX} ____\033[0m"
-
-			# echo -e "\033[1mComputing 3dPFM in ${DATASET} with ${CRITERIA} criteria\033[0m"
-			# 3dPFM -input ${DATASET} -algorithm lasso -criteria ${CRITERIA} -hrf SPMG1 -mask mask.nii.gz -maxiterfactor 0.4 -outZAll ${PFX} -jobs 4
-			# echo -e "\033[1m____ Done computing PFM for subj: ${sub_dir} and RUN${run} and DATASET ${DATASET}. Moving on to thresholding. ____\033[0m"
+			
 
 			if [ $MINBETA > 0 ]
 				then
@@ -83,7 +53,7 @@ do
 					3dmerge -dxyz=1 -1erode 50 -1clust 1 ${CLUSTERSIZE} -doall -prefix THC_beta_pos_${DATASET} pos_THAmp_beta_${DATASET} -overwrite
 					3dmerge -dxyz=1 -1erode 50 -1clust 1 ${CLUSTERSIZE} -doall -prefix THC_beta_neg_${DATASET} neg_THAmp_beta_${DATASET} -overwrite
 					3dcalc -a THC_beta_pos_${DATASET} -b THC_beta_neg_${DATASET} -expr "a+b" -prefix THC_beta_${DATASET} -overwrite
-  					# 3dmerge -dxyz=1 -1clust 1 ${CLUSTERSIZE} -doall -prefix THC_beta_${DATASET} THAmp_beta_${DATASET} -overwrite
+  					
 					
 				else
 							# \\ Apply minimum cluster size in beta estimates from 3dPFM
@@ -100,11 +70,8 @@ do
 			echo -e "\033[1mComputing Activation Time Series POSITIVE for ${DATASET}\033[0m"
  			3dcalc -a ${ATS_DATASET} -expr 'posval(a)' -prefix temp_pos -overwrite
   			3dcalc -a ${ATS_DATASET} -expr 'ispositive(a)' -prefix temp_pos_bool -overwrite
-  				# # \\ Whole brain mask
-  			# 3dmaskave -quiet -mask mask.nii.gz -sum temp_pos+tlrc. > ATSsum_pos.${ATS_DATASET:0:46}_4D_clust.1D
-  			# 3dmaskave -quiet -mask mask.nii.gz -sum temp_pos_bool+tlrc. > ATSnum_pos.${ATS_DATASET:0:46}_4D_clust.1D
-  			# #rm temp_pos+tlrc.* temp_pos_bool+tlrc.*
-				# \\ ROI mask (insula + mid cingulate)
+  				
+				# \\ ROI mask (insula)
 			3dmaskave -quiet -mask ${MYMASK} -sum temp_pos+tlrc. > ATSsum_pos.${ATS_DATASET:0:43}_${ROIMASK}.1D
 			3dmaskave -quiet -mask ${MYMASK} -sum temp_pos_bool+tlrc. > ATSnum_pos.${ATS_DATASET:0:43}_${ROIMASK}.1D
   			rm temp_pos+tlrc.* temp_pos_bool+tlrc.*
@@ -113,11 +80,8 @@ do
 			echo -e "\033[1mComputing Activation Time Series NEGATIVE for ${DATASET}\033[0m"
   			3dcalc -a ${ATS_DATASET} -expr 'posval(-1*a)' -prefix temp_neg -overwrite
   			3dcalc -a ${ATS_DATASET} -expr 'ispositive(-1*a)' -prefix temp_neg_bool -overwrite
-  				# # \\ Whole brain mask
-  			# 3dmaskave -quiet -mask mask.nii.gz -sum temp_neg+tlrc. > ATSsum_neg.${ATS_DATASET:0:46}_4D_clust.1D
-  			# 3dmaskave -quiet -mask mask.nii.gz -sum temp_neg_bool+tlrc. > ATSnum_neg.${ATS_DATASET:0:46}_4D_clust.1D
-  			# #rm temp_neg+tlrc.* temp_neg_bool+tlrc.*
-  				# \\ ROI MASK (insula + mid cingulate)
+  				
+  				# \\ ROI MASK (insula)
 			3dmaskave -quiet -mask ${MYMASK} -sum temp_neg+tlrc. > ATSsum_neg.${ATS_DATASET:0:43}_${ROIMASK}.1D
 			3dmaskave -quiet -mask ${MYMASK} -sum temp_neg_bool+tlrc. > ATSnum_neg.${ATS_DATASET:0:43}_${ROIMASK}.1D
   			rm temp_neg+tlrc.* temp_neg_bool+tlrc.*
@@ -126,11 +90,8 @@ do
 			echo -e "\033[1mComputing Activation Time Series ABSOLUTE for ${DATASET}\033[0m"
   			3dcalc -a ${ATS_DATASET} -expr 'abs(a)' -prefix temp_abs -overwrite
   			3dcalc -a ${ATS_DATASET} -expr 'bool(abs(a))' -prefix temp_abs_bool -overwrite
-  				# # \\ Whole brain mask
-  			# 3dmaskave -quiet -mask mask.nii.gz -sum temp_abs+tlrc. > ATSsum_abs.${ATS_DATASET:0:44}_4D_clust.1D
-  			# 3dmaskave -quiet -mask mask.nii.gz -sum temp_abs_bool+tlrc. > ATSnum_abs.${ATS_DATASET:0:44}_4D_clust.1D
-			# #rm temp_abs+tlrc.* temp_abs_bool+tlrc.*
-				# \\ ROI MASK (insula + mid cingulate)
+  				
+				# \\ ROI MASK (insula)
 			3dmaskave -quiet -mask ${MYMASK} -sum temp_abs+tlrc. > ATSsum_abs.${ATS_DATASET:0:43}_${ROIMASK}.1D
 			3dmaskave -quiet -mask ${MYMASK} -sum temp_abs_bool+tlrc. > ATSnum_abs.${ATS_DATASET:0:43}_${ROIMASK}.1D
   			rm temp_abs+tlrc.* temp_abs_bool+tlrc.*
